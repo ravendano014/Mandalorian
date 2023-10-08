@@ -151,13 +151,24 @@
 }]; // Array para almacenar las partes cargadas desde JSON
 
 
-    console.log(jsonParts);
-    if(jsonParts.length > 0){
-      for (var i = 0; i < jsonParts[0].parts.length; i++) {
-        createMeshFromPart(jsonParts[0].parts[i]);
-      }
-    }
+   const localAxes = new BABYLON.AxesViewer(scene, 1);
 
+    // Variable para el objeto 3D seleccionado
+    var selectedMesh = null;
+
+    scene.onKeyboardObservable.add((kbInfo) => {
+        switch (kbInfo.type) {
+            case BABYLON.KeyboardEventTypes.KEYDOWN:
+                console.log("KEY DOWN: ", kbInfo.event.key);
+            break;
+            case BABYLON.KeyboardEventTypes.KEYUP:
+                console.log("KEY UP: ", kbInfo.event.code);
+            break;
+        }
+    });
+
+    let parts = [];
+    
     function createMeshFromPart(part) {
       var mesh = new BABYLON.Mesh(part.mesh_id, scene);
       var meshURL = jsonParts[0].models + part.mesh_name;
@@ -165,17 +176,23 @@
       BABYLON.SceneLoader.ImportMesh("", meshURL, "", scene, function (newMeshes) {
         mesh = newMeshes[0];
       });
+      console.log(part);
 
       mesh.position = new BABYLON.Vector3(part.position[0].x, part.position[0].y, part.position[0].z);
       mesh.rotation = new BABYLON.Vector3(BABYLON.Tools.ToRadians(part.rotation[0].x), BABYLON.Tools.ToRadians(part.rotation[0].y), BABYLON.Tools.ToRadians(part.rotation[0].z));
-      mesh.visibility = 0.5;
+      mesh.name = part.mesh_name;
 
       mesh.isPickable = true;
       mesh.actionManager = new BABYLON.ActionManager(scene);
+      
+      //parts.push(mesh);
 
       return mesh;
     }
 
+    for (var i = 0; i < jsonParts[0].parts.length; i++) {
+      createMeshFromPart(jsonParts[0].parts[i]);
+    }
 
     engine.runRenderLoop(function () {
       scene.render();
@@ -194,14 +211,32 @@
             }
 
             pickedMesh = result.pickedMesh;
+
+            console.log(scene);
+            //console.log(result);
+            
+            
+
+            for (var i = 0; i < jsonParts[0].parts.length; i++) {
+                scene.meshes[i+6+jsonParts[0].parts.length]._position._x = jsonParts[0].parts[i].position[0].x;
+                scene.meshes[i+6+jsonParts[0].parts.length]._position._y = jsonParts[0].parts[i].position[0].y;
+                scene.meshes[i+6+jsonParts[0].parts.length]._position._z = jsonParts[0].parts[i].position[0].z;
+                scene.meshes[i+6+jsonParts[0].parts.length]._rotation._x = jsonParts[0].parts[i].rotation[0].x;
+                scene.meshes[i+6+jsonParts[0].parts.length]._rotation._y = jsonParts[0].parts[i].rotation[0].y;
+                scene.meshes[i+6+jsonParts[0].parts.length]._rotation._z = jsonParts[0].parts[i].rotation[0].z;
+                uid = scene.meshes[i+6+jsonParts[0].parts.length].uniqueId;
+                redrawmesh = scene.getMeshByUniqueId(uid);
+                
+            }
+
             if (pickedMesh) {
                 pickedMesh.edgesWidth = 40.0;
                 pickedMesh.edgesColor = new BABYLON.Color4(0, 1, 0.87);
                 pickedMesh.enableEdgesRendering();
                 selectedMesh = pickedMesh;
-
+                //console.log(pickedMesh);
                  // Mostrar propiedades en la barra lateral
-                document.getElementById("name").textContent = pickedMesh.id;
+                document.getElementById("name").textContent = pickedMesh.uniqueId;
                 document.getElementById("position").textContent = `X: ${pickedMesh.position.x.toFixed(2)}, Y: ${pickedMesh.position.y.toFixed(2)}, Z: ${pickedMesh.position.z.toFixed(2)}`;
                 document.getElementById("rotation").textContent = `X: ${BABYLON.Tools.ToDegrees(pickedMesh.rotation.x).toFixed(2)}°, Y: ${BABYLON.Tools.ToDegrees(pickedMesh.rotation.y).toFixed(2)}°, Z: ${BABYLON.Tools.ToDegrees(pickedMesh.rotation.z).toFixed(2)}°`;
                 document.getElementById("color").textContent = `Color: ${pickedMesh.material ? pickedMesh.material.diffuseColor.toString() : "N/A"}`;
@@ -246,91 +281,73 @@
                     pickedMesh.rotation.z -= BABYLON.Tools.ToRadians(speed);
                     break;
                 }
+
                 });
             
             }
         }
     };
 
-// Función para cargar un archivo JSON desde una URL
-function loadFromURL() {
-    var jsonURL = prompt("Enter JSON URL:");
-    if (jsonURL) {
-        fetch(jsonURL)
-            .then(response => response.json())
-            .then(data => {
-                jsonParts = data;
-                // Limpia la escena actual antes de cargar las nuevas partes
-                //scene.dispose();
-                console.log(jsonParts);
-                for (var i = 0; i < jsonParts[0].parts.length; i++) {
-                  createMeshFromPart(jsonParts[0].parts[i]);
-                }
-            })
-            .catch(error => console.error("Error loading JSON from URL:", error));
-    }
+
+
+
+
+// Función para recopilar la información actualizada de las partes y descargar el JSON
+function downloadJson() {
+  //console.log(parts);
+  const updatedParts = scene.meshes.map((part) => {
+    const mesh = scene.getMeshByID(part.uniqueId);
+    // console.log(mesh);
+    // console.log(part);
+    return {
+      uid: part.uniqueId,
+      mesh_id: part.id,
+      mesh_name: part.name,
+      position: {
+        x: part._position._x,
+        y: part._position._y,
+        z: part._position._z,
+      },
+      rotation: {
+        x: BABYLON.Tools.ToDegrees(part._rotation._x),
+        y: BABYLON.Tools.ToDegrees(part._rotation._y),
+        z: BABYLON.Tools.ToDegrees(part._rotation._z),
+      },
+    };
+  });
+
+  // Actualiza jsonParts
+  for (var i = 0; i < jsonParts[0].parts.length; i++) {
+    // console.log(jsonParts[0].parts[i].position.x);
+
+    jsonParts[0].parts[i].position[0].x =  updatedParts[i+6+jsonParts[0].parts.length].position.x;
+    jsonParts[0].parts[i].position[0].y =  updatedParts[i+6+jsonParts[0].parts.length].position.y;
+    jsonParts[0].parts[i].position[0].z =  updatedParts[i+6+jsonParts[0].parts.length].position.z;
+    jsonParts[0].parts[i].rotation[0].x =  updatedParts[i+6+jsonParts[0].parts.length].rotation.x;
+    jsonParts[0].parts[i].rotation[0].y =  updatedParts[i+6+jsonParts[0].parts.length].rotation.y;
+    jsonParts[0].parts[i].rotation[0].z =  updatedParts[i+6+jsonParts[0].parts.length].rotation.z;
+    //console.log(jsonParts[0].parts[i]);
+    parts.push(jsonParts[0].parts[i]);
+   }
+
+  //console.log(updatedParts);
+  const jsonContent = JSON.stringify(jsonParts, null, 2);
+  const blob = new Blob([jsonContent], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+
+  // Crear un enlace para la descarga
+  const downloadLink = document.createElement("a");
+  downloadLink.href = url;
+  downloadLink.download = "excavator.json";
+  downloadLink.click();
+
+  // Liberar la URL del objeto Blob
+  URL.revokeObjectURL(url);
 }
 
-// Función para cargar un archivo JSON desde el sistema de archivos local
-function loadFromFile() {
-    var fileInput = document.getElementById("jsonFileInput");
-    fileInput.addEventListener("change", function (event) {
-        const file = event.target.files[0];
+// Asigna la función downloadJson al botón de descarga
+document.getElementById("downloadJsonButton").addEventListener("click", downloadJson);
 
-        if (file) {
-            const reader = new FileReader();
-
-            reader.onload = function (e) {
-              const contents = e.target.result;
-              console.log(contents);
-                try {
-                    const data = JSON.parse(contents);
-                    jsonParts = data;
-                    // Limpia la escena actual antes de cargar las nuevas partes
-                    //scene.dispose();
-
-                } catch (error) {
-                    console.error("Error loading JSON from file:", error);
-                }
-            };
-            reader.readAsText(file);
-            console.log(jsonParts);
-        }
-    });
-    fileInput.click();
-}
-
-// Función para guardar las partes en un archivo JSON
-function saveToJson() {
-    var jsonContent = JSON.stringify(jsonParts, null, 2);
-    var blob = new Blob([jsonContent], { type: "application/json" });
-    var url = URL.createObjectURL(blob);
-
-    // Crea un enlace de descarga y lo simula para guardar el archivo JSON
-    var downloadLink = document.createElement("a");
-    downloadLink.href = url;
-    downloadLink.download = "parts.json";
-    document.body.appendChild(downloadLink);
-    downloadLink.click();
-    document.body.removeChild(downloadLink);
-    URL.revokeObjectURL(url);
-}
-
-    const localAxes = new BABYLON.AxesViewer(scene, 1);
-
-    // Variable para el objeto 3D seleccionado
-    var selectedMesh = null;
-
-    scene.onKeyboardObservable.add((kbInfo) => {
-        switch (kbInfo.type) {
-            case BABYLON.KeyboardEventTypes.KEYDOWN:
-                console.log("KEY DOWN: ", kbInfo.event.key);
-            break;
-            case BABYLON.KeyboardEventTypes.KEYUP:
-                console.log("KEY UP: ", kbInfo.event.code);
-            break;
-        }
-    });
 
   </script>
 </body>
