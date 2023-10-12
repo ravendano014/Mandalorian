@@ -305,7 +305,7 @@
 
 // Función para recopilar la información actualizada de las partes y descargar el JSON
 function downloadJson() {
-  // console.log(scene);
+  console.log(jsonParts);
   const updatedParts = jsonParts[0].parts.map((part) => {
     const mesh = scene.getMeshByID(part.mesh_id);
     return {
